@@ -38,9 +38,9 @@ Installing
 ==========
 
 - ``pip install aiocache``
-- ``pip install aiocache[redis]``
+- ``pip install aiocache[valkey]``
 - ``pip install aiocache[memcached]``
-- ``pip install aiocache[redis,memcached]``
+- ``pip install aiocache[valkey,memcached]``
 - ``pip install aiocache[msgpack]``
 
 
@@ -53,7 +53,7 @@ Using a cache is as simple as
 
     >>> import asyncio
     >>> from aiocache import SimpleMemoryCache
-    >>> cache = SimpleMemoryCache()  # Or RedisCache, MemcachedCache...
+    >>> cache = SimpleMemoryCache()  # Or ValkeyCache, MemcachedCache...
     >>> with asyncio.Runner() as runner:
     >>>     runner.run(cache.set('key', 'value'))
     True
@@ -68,16 +68,21 @@ Or as a decorator
 
     from collections import namedtuple
 
-    from aiocache import RedisCache, cached
+    from glide import GlideClientConfiguration, NodeAddress
+
+    from aiocache import ValkeyCache, cached
     from aiocache.serializers import PickleSerializer
-    # With this we can store python objects in backends like Redis!
+    # With this we can store python objects in backends like Valkey!
 
     Result = namedtuple('Result', "content, status")
-    redis_client = redis.Redis(host="127.0.0.1", port=6379)
-    redis_cache = RedisCache(redis_client, namespace="main")
+    addresses = [NodeAddress("127.0.0.1", 6379)]
+    config = GlideClientConfiguration(addresses=addresses, database_id=0)
+    valkey_cache = ValkeyCache(
+        config=config, namespace="main", serializer=PickleSerializer()
+    )
 
 
-    @cached(redis_cache, key="key", serializer=PickleSerializer(), port=6379, namespace="main")
+    @cached(valkey_cache, ttl=10, key_builder=lambda *args, **kw: "key")
     async def cached_call():
         print("Sleeping for three seconds zzzz.....")
         await asyncio.sleep(3)
@@ -85,11 +90,11 @@ Or as a decorator
 
 
     async def run():
-        async with redis_client, redis_cache:
+        async with valkey_cache:
             await cached_call()
             await cached_call()
             await cached_call()
-            await redis_cache.delete("key")
+            await valkey_cache.delete("key")
 
     if __name__ == "__main__":
         asyncio.run(run())
